@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     'luxyl_web',
+    'etsy_orders'
 ]
 
 MIDDLEWARE = [
