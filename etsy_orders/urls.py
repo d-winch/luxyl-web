@@ -7,4 +7,5 @@ urlpatterns = [
     path('', views.index, name='etsy_orders'),
     path('<int:order_id>/', views.order, name='order'),
     path('get_orders/', views.get_orders, name='get_orders'),
+    path('orders_to_appsheet/', views.orders_to_appsheet, name='orders_to_appsheet'),
 ]

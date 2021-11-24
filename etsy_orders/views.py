@@ -6,6 +6,7 @@ from datetime import datetime
 import pytz
 from .etsy import EtsyClient
 from .models import EtsyOrder
+from .google_sheets import orders_to_sheets
 
 def index(request):
     context = {"context": "hello"}
@@ -17,28 +18,13 @@ def order(request, order_id):
 
 def get_orders(request):
     etsy = EtsyClient()
-    transactions = etsy.get_transactions(limit=500, offset=700)
-    
-    for transaction in transactions:
-        print(transaction['transaction_id'])
-        
-        obj, created = EtsyOrder.objects.update_or_create(
-            transaction_id=transaction['transaction_id'],
-            defaults={
-                'transaction_id': transaction['transaction_id'],
-                'quantity': transaction['quantity'],
-                'receipt_id': transaction['receipt_id'],
-                'listing_id': transaction['listing_id'],
-                'buyer_user_id': transaction['buyer_user_id'],
-                #message_from_buyer: transaction['message_from_buyer'],
-                #was_paid: transaction['was_paid'],
-                'paid_tsz': make_aware(datetime.utcfromtimestamp(transaction['paid_tsz'])),
-                'creation_tsz': make_aware(datetime.utcfromtimestamp(transaction['creation_tsz'])),
-                'downloaded_tsz': timezone.localtime(timezone.now()),
-            },
-        )
-        print(created)
-    print(len(transactions))
-    
-    context = {"context": transactions}
+    #transactions = etsy.process_orders(limit=25, offset=0)
+    etsy.process_shop_receipts(limit=25, offset=0)
+    context = {"context": ''}
+    return render(request, 'index.html', context)
+
+def orders_to_appsheet(request):
+    unshipped = EtsyOrder.objects.filter(shipment__isnull=True)
+    orders_to_sheets(orders=unshipped)
+    context = {"context": unshipped}
     return render(request, 'index.html', context)

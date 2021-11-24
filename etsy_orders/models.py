@@ -1,46 +1,86 @@
+from datetime import datetime
+from html import unescape
+import os
+
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.timezone import make_aware
 
 
 class EtsyOrder(models.Model):
 
-    transaction_id = models.IntegerField("Transaction ID", primary_key=True)
-    quantity = models.IntegerField("Quantity")
-    receipt_id = models.IntegerField("Receipt ID")
-    listing_id = models.IntegerField("Listing ID")
+    receipt_id = models.IntegerField("Receipt ID", primary_key=True)
     buyer_user_id = models.IntegerField("Buyer ID")
     message_from_buyer = models.TextField("Buyer Message", blank=True, null=True)
     was_paid = models.BooleanField("Is Paid", default=True)
-    creation_tsz = models.DateTimeField("Created At")
-    paid_tsz = models.DateTimeField("Paid At")
-    downloaded_tsz = models.DateTimeField("Downloaded At", auto_now_add=True)
+    grandtotal = models.FloatField("Grand Total")
+    is_express = models.BooleanField("Is Express", default=False)
+    creation_tsz = models.DateTimeField("Order Date")
+    downloaded_tsz = models.DateTimeField("Downloaded", auto_now_add=True)
+    
 
     class Meta:
         verbose_name = ("Etsy Order")
         verbose_name_plural = ("Etsy Orders")
 
     def __str__(self):
-        return str(self.transaction_id)
+        return str(self.receipt_id)
+    
+    def add_order(receipt):
+        order, created = EtsyOrder.objects.update_or_create(
+            receipt_id=receipt['receipt_id'],
+            defaults={
+                'receipt_id': receipt['receipt_id'],
+                'buyer_user_id': receipt['buyer_user_id'],
+                'message_from_buyer': unescape(receipt['message_from_buyer']) if receipt['message_from_buyer'] else '',
+                'was_paid': receipt['was_paid'],
+                'is_express': float(receipt['total_shipping_cost'])>0,
+                'grandtotal': receipt['grandtotal'],
+                'creation_tsz': make_aware(datetime.utcfromtimestamp(receipt['creation_tsz'])),
+                'downloaded_tsz': timezone.localtime(timezone.now()),
+            },
+        )
+        return order
 
     #def get_absolute_url(self):
     #    return reverse("etsy_orders:EtsyOrder_detail", kwargs={"pk": self.pk})
 
 
-class Product(models.Model):
+class OrderItem(models.Model):
 
-    product_id = models.IntegerField("Product ID", primary_key=True)
+    transaction_id = models.IntegerField("Transaction ID", primary_key=True)
     title = models.CharField("Item Title", max_length=1024)
     sku = models.CharField("SKU", max_length=50)
+    product_id = models.IntegerField("Product ID")
+    listing_id = models.IntegerField("Listing ID")
     property_values_size = models.CharField("Size", max_length=12)
     price = models.FloatField("Price")
-    transaction_id = models.ForeignKey(EtsyOrder, on_delete=models.CASCADE)
+    quantity = models.IntegerField("Quantity")
+    receipt_id = models.ForeignKey(EtsyOrder, on_delete=models.CASCADE)
 
     class Meta:
-        verbose_name = ("Product")
-        verbose_name_plural = ("Products")
+        verbose_name = ("Order Item")
+        verbose_name_plural = ("Order Items")
 
     def __str__(self):
         return self.sku
+
+    def add_order_item(receipt, order):
+        order, created = OrderItem.objects.update_or_create(
+            transaction_id=receipt['transaction_id'],
+            defaults={
+                'transaction_id': receipt['transaction_id'],
+                'title': unescape(receipt['title']),
+                'sku': receipt['product_data']['sku'],
+                'product_id': receipt['product_data']['product_id'],
+                'listing_id': receipt['listing_id'],
+                'property_values_size': unescape(receipt['variations'][0]['formatted_value']),
+                'price': receipt['price'],
+                'quantity': receipt['quantity'],
+                'receipt_id': order,
+            },
+        )
 
     #def get_absolute_url(self):
     #    return reverse("etsy_orders:Product_detail", kwargs={"pk": self.pk})
@@ -48,8 +88,8 @@ class Product(models.Model):
 
 class CustomerDetail(models.Model):
 
-    user_id = models.IntegerField("User ID", primary_key=True)
-    transaction_id = models.ForeignKey(EtsyOrder, on_delete=models.CASCADE)
+    buyer_user_id = models.IntegerField("User ID", primary_key=True)
+    receipt_id = models.ForeignKey(EtsyOrder, on_delete=models.CASCADE)
 
     name = models.CharField(
         "Full name",
@@ -72,6 +112,13 @@ class CustomerDetail(models.Model):
         "City",
         max_length=1024,
     )
+    
+    state = models.CharField(
+        "Country",
+        max_length=1024,
+        null=True,
+        blank=True
+    )
 
     zip_code = models.CharField(
         "ZIP / Postal code",
@@ -92,17 +139,36 @@ class CustomerDetail(models.Model):
     def __str__(self):
         return self.name
 
+    def add_customer_detail(receipt, order):
+        order, created = CustomerDetail.objects.update_or_create(
+            buyer_user_id=receipt['buyer_user_id'],
+            defaults={
+                'buyer_user_id': receipt['buyer_user_id'],
+                'receipt_id': order,
+                'name': unescape(receipt['name']) if receipt['name'] else '',
+                'address1': unescape(receipt['first_line']) if receipt['first_line'] else '',
+                'address2': unescape(receipt['second_line']) if receipt['second_line'] else '',
+                'city': unescape(receipt['city']) if receipt['city'] else '',
+                'state': unescape(receipt['state']) if receipt['state'] else '',
+                'zip_code': unescape(receipt['zip']) if receipt['zip'] else '',
+                'country_id': receipt['country_id'],
+                'formatted_address': unescape(receipt['formatted_address']) if receipt['formatted_address'] else '',
+            },
+        )
+
     #def get_absolute_url(self):
     #    return reverse("etsy_orders:CutomerDetail_detail", kwargs={"pk": self.pk})
 
 
 class Shipment(models.Model):
 
-    receipt_shipping_id = models.IntegerField(primary_key=True)
-    order_id = models.ForeignKey(EtsyOrder, on_delete=models.CASCADE)
+    shipping_id = models.IntegerField(primary_key=True)
+    receipt_id = models.ForeignKey(EtsyOrder, on_delete=models.CASCADE)
     carrier_name = models.CharField(max_length=50)
     tracking_code = models.CharField(max_length=50)
+    tracking_url = models.URLField(blank=True, null=True)
     mailing_date = models.DateTimeField()
+    is_express = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = ("Shipment")
@@ -110,6 +176,20 @@ class Shipment(models.Model):
 
     def __str__(self):
         return self.tracking_code
+    
+    def add_shipping_detail(shipment, order):
+        ship, created = Shipment.objects.update_or_create(
+            shipping_id=shipment['receipt_shipping_id'],
+            defaults={
+                'shipping_id': shipment['receipt_shipping_id'],
+                'receipt_id': order,
+                'carrier_name': unescape(shipment['carrier_name']) if shipment['carrier_name'] else '',
+                'tracking_code': shipment['tracking_code'],
+                'tracking_url': shipment['tracking_url'],
+                'mailing_date': make_aware(datetime.utcfromtimestamp(shipment['mailing_date'])),
+                'is_express': getattr(order, 'is_express'),
+            },
+        )
 
     #def get_absolute_url(self):
     #    return reverse("etsy_orders:Shipment_detail", kwargs={"pk": self.pk})
