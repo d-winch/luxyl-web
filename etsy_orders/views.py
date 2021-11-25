@@ -17,13 +17,22 @@ def order(request, order_id):
     return render(request, 'index.html', context)
 
 def get_orders(request):
+    limit = int(request.GET.get('limit', 1))
+    offset = int(request.GET.get('offset', 0))
     etsy = EtsyClient()
     #transactions = etsy.process_orders(limit=25, offset=0)
-    etsy.process_shop_receipts(limit=25, offset=0)
+    etsy.process_shop_receipts(limit=limit, offset=offset)
     context = {"context": ''}
     return render(request, 'index.html', context)
 
 def orders_to_appsheet(request):
+    # Get orders from etsy
+    limit = int(request.GET.get('limit', 1))
+    offset = int(request.GET.get('offset', 0))
+    etsy = EtsyClient()
+    etsy.process_shop_receipts(limit=limit, offset=offset)
+    
+    # Add unshipped orders to Google Sheet
     unshipped = EtsyOrder.objects.filter(shipment__isnull=True)
     orders_to_sheets(orders=unshipped)
     context = {"context": unshipped}
