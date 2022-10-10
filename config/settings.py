@@ -43,7 +43,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     'luxyl_web',
-    'etsy_orders'
+    'etsy_orders',
+    'parcel2go',
+    'designs',
 ]
 
 MIDDLEWARE = [

@@ -1,7 +1,8 @@
+import os
 from datetime import datetime
 from html import unescape
-import os
 
+from designs.models import Design
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -58,6 +59,7 @@ class OrderItem(models.Model):
     price = models.FloatField("Price")
     quantity = models.IntegerField("Quantity")
     receipt_id = models.ForeignKey(EtsyOrder, on_delete=models.CASCADE)
+    design = models.ForeignKey(Design, on_delete=models.DO_NOTHING)
 
     class Meta:
         verbose_name = ("Order Item")
@@ -67,6 +69,7 @@ class OrderItem(models.Model):
         return self.sku
 
     def add_order_item(receipt, order):
+        design = receipt['product_data']['sku'][0:5]
         order, created = OrderItem.objects.update_or_create(
             transaction_id=receipt['transaction_id'],
             defaults={
@@ -79,6 +82,7 @@ class OrderItem(models.Model):
                 'price': receipt['price'],
                 'quantity': receipt['quantity'],
                 'receipt_id': order,
+                'design': Design.objects.filter(pk=design)[0]
             },
         )
 
@@ -95,6 +99,8 @@ class CustomerDetail(models.Model):
         "Full name",
         max_length=1024,
     )
+    
+    email = models.EmailField("Buyer Email")
 
     address1 = models.CharField(
         "Address line 1",
@@ -114,7 +120,7 @@ class CustomerDetail(models.Model):
     )
     
     state = models.CharField(
-        "Country",
+        "County",
         max_length=1024,
         null=True,
         blank=True
@@ -127,7 +133,7 @@ class CustomerDetail(models.Model):
 
     country_id = models.IntegerField("Country ID")
 
-    formatted_address = models.CharField(
+    formatted_address = models.TextField(
         "Formatted Address",
         max_length=1024,
     )
@@ -146,6 +152,7 @@ class CustomerDetail(models.Model):
                 'buyer_user_id': receipt['buyer_user_id'],
                 'receipt_id': order,
                 'name': unescape(receipt['name']) if receipt['name'] else '',
+                'email': receipt['buyer_email'],
                 'address1': unescape(receipt['first_line']) if receipt['first_line'] else '',
                 'address2': unescape(receipt['second_line']) if receipt['second_line'] else '',
                 'city': unescape(receipt['city']) if receipt['city'] else '',
@@ -155,6 +162,8 @@ class CustomerDetail(models.Model):
                 'formatted_address': unescape(receipt['formatted_address']) if receipt['formatted_address'] else '',
             },
         )
+        if not created:
+            print(receipt)
 
     #def get_absolute_url(self):
     #    return reverse("etsy_orders:CutomerDetail_detail", kwargs={"pk": self.pk})

@@ -3,6 +3,7 @@ from django.utils import timezone, dateformat
 from django.contrib import admin
 from django.http import HttpResponse
 from .models import EtsyOrder, CustomerDetail, OrderItem, Shipment
+from parcel2go.models import Parcel2GoShipment
 
 class ExportCsvMixin:
     def export_as_csv(self, request, queryset):
@@ -35,6 +36,42 @@ class ShipmentInline(admin.TabularInline):
     model = Shipment
     show_change_link = True
 
+class Parcel2GoShipmentInline(admin.TabularInline):
+    model = Parcel2GoShipment
+    show_change_link = True
+
+class CustomerDetailAdmin(admin.ModelAdmin, ExportCsvMixin):
+    list_display = [
+        'buyer_user_id',
+        'receipt_id',
+        'name',
+        'email',
+        'address1',
+        'address2',
+        'city',
+        'state',
+        'zip_code',
+        'country_id',
+        'formatted_address',
+    ]
+    
+    search_fields = (
+        'buyer_user_id',
+        'receipt_id__receipt_id',
+        'name',
+        'email',
+        'address1',
+        'address2',
+        'city',
+        'state',
+        'zip_code',
+        'formatted_address',
+    )
+    
+    readonly_fields=('buyer_user_id', 'receipt_id',)
+    
+    actions = ['export_as_csv']
+
 class EtsyOrderAdmin(admin.ModelAdmin, ExportCsvMixin):
     list_display = [
         'receipt_id',
@@ -50,6 +87,13 @@ class EtsyOrderAdmin(admin.ModelAdmin, ExportCsvMixin):
         'downloaded_tsz',
     ]
     
+    search_fields = (
+        'receipt_id',
+        'buyer_user_id',
+        'orderitem__sku',
+        'message_from_buyer',
+    )
+    
     ordering = ('-creation_tsz',)
     
     list_filter = ['was_paid', 'creation_tsz']
@@ -59,6 +103,7 @@ class EtsyOrderAdmin(admin.ModelAdmin, ExportCsvMixin):
         CustomerInline,
         OrderItemInline,
         ShipmentInline,
+        Parcel2GoShipmentInline,
     ]
     
     def has_change_permission(self, request, obj=None):
@@ -73,7 +118,7 @@ class EtsyOrderAdmin(admin.ModelAdmin, ExportCsvMixin):
     order_items.short_description = "Items"
     
     def was_shipped(self, obj):
-        return obj.shipment_set.count() > 0
+        return obj.parcel2goshipment_set.count() > 0
     was_shipped.boolean = True
     was_shipped.short_description = "Shipped"
     
@@ -89,8 +134,8 @@ class OrderItemAdmin(admin.ModelAdmin, ExportCsvMixin):
     
     actions = ['export_as_csv']
     
-    def has_change_permission(self, request, obj=None):
-        return False
+    # readonly_fields=('receipt_id', 'transaction_id', 'product_id', 'listing_id')
+
 
 class ShipmentAdmin(admin.ModelAdmin, ExportCsvMixin):
     list_display = [
@@ -110,6 +155,6 @@ class ShipmentAdmin(admin.ModelAdmin, ExportCsvMixin):
         return False
 
 admin.site.register(EtsyOrder, EtsyOrderAdmin)
-admin.site.register(CustomerDetail)
+admin.site.register(CustomerDetail, CustomerDetailAdmin)
 admin.site.register(OrderItem, OrderItemAdmin)
 admin.site.register(Shipment, ShipmentAdmin)

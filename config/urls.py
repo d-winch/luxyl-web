@@ -20,5 +20,6 @@ urlpatterns = [
     path('luxyl_web/', include('luxyl_web.urls')),
     path('admin/', admin.site.urls),
     path("etsy_orders/", include('etsy_orders.urls')),
+    path("parcel2go/", include('parcel2go.urls')),
     path("", include('luxyl_web.urls')),
 ]

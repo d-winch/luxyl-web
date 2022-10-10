@@ -21,7 +21,7 @@ def get_orders(request):
     offset = int(request.GET.get('offset', 0))
     etsy = EtsyClient()
     #transactions = etsy.process_orders(limit=25, offset=0)
-    etsy.process_shop_receipts(limit=limit, offset=offset)
+    etsy.process_shop_receipts(limit=limit, offset=offset, was_paid=True, was_shipped=False)
     context = {"context": ''}
     return render(request, 'index.html', context)
 
@@ -29,8 +29,10 @@ def orders_to_appsheet(request):
     # Get orders from etsy
     limit = int(request.GET.get('limit', 1))
     offset = int(request.GET.get('offset', 0))
+    was_paid = bool(request.GET.get('was_paid', True))
+    was_shipped = bool(request.GET.get('was_shipped', False))
     etsy = EtsyClient()
-    etsy.process_shop_receipts(limit=limit, offset=offset)
+    etsy.process_shop_receipts(limit=limit, offset=offset, was_paid=was_paid, was_shipped=was_shipped)
     
     # Add unshipped orders to Google Sheet
     unshipped = EtsyOrder.objects.filter(shipment__isnull=True)
